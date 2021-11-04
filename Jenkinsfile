@@ -33,10 +33,13 @@ pipeline {
 
   stages {
     stage ('Prepare manifest') {
+      environment {
+          GITHUB_TOKEN = credentials('hanu-github-token-new')
+      }
       steps {
         script {
           sh """
-            git clone https://github.com/openinfradev/taco-gate-inventories.git
+            git clone https://$GITHUB_TOKEN@github.com/openinfradev/taco-gate-inventories.git
             cp taco-gate-inventories/config/pangyo-clouds.yml ./clouds.yaml
           """
 
