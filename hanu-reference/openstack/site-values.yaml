@@ -11,8 +11,6 @@ global:
   ceph_keyring: AQBAHAdfHQ5RLhAAzynxAYUokA55ku4ZwqVJjQ==
   cinder_keyring: AQAin8tU0CFgEhAATb7sYgtWsh+S5HEbg6MrGg==
   rbd_secret_uuid: 582393ff-9a5c-4a2e-ae0d-86ec18c36afc
-  hypervisorInterface: eth0
-  libvirtInterface: eth0
   adminPassword: Pa$$w0rd!
 
 charts:
@@ -22,11 +20,11 @@ charts:
   override:
     deployment.ceph: false
     deployment.client_secrets: true
-    deployment.rbd_provisioner: true
+    deployment.rbd_provisioner: false
     deployment.cephfs_provisioner: false
     storageclass.rbd.provision_storage_class: true
     storageclass.cephfs.provision_storage_class: false
-    conf.ceph.global.mon_host: TACO_MON_HOST
+    conf.ceph.global.mon_host: 192.168.95.12,192.168.95.13,192.168.95.14
     manifests.configmap_bin: false
     manifests.configmap_bin_common: false
     manifests.configmap_etc: true
@@ -65,7 +63,7 @@ charts:
     conf.ceph.admin_keyring: $(ceph_keyring)
     conf.ceph.enabled: true
     conf.backends.rbd.rbd_pool: cinder-volumes
-    conf.backends.rbd_secret_uuid: $(rbd_secret_uuid)
+    conf.backends.rbd.rbd_secret_uuid: $(rbd_secret_uuid)
     conf.cinder.DEFAULT.enabled_backends: rbd
     conf.cinder.DEFAULT.default_volume_type: rbd
     conf.cinder.DEFAULT.backup_driver: cinder.backup.drivers.ceph.CephBackupDriver
@@ -176,19 +174,11 @@ charts:
     repository: $(repository)
   override:
     network.host_namespace: true
-    network.vip.manage: false
-    network.vip.mode: keepalived
-    network.vip.interface: eth0
-    network.vip.addr: 10.10.10.122/32
-    network.vip.keepalived_router_id: 49
     monitoring.prometheus.enabled: true
     monitoring.prometheus.ingress_exporter.scrape: true
     monitoring.prometheus.config.worker-processes: 8
     config.worker-processes: 8
-    pod.security_context.server.container.ingress_vip.capabilities.add: NET_ADMIN
-    pod.security_context.server.container.ingress_vip.readOnlyRootFilesystem: false
-    pod.security_context.server.container.ingress_vip.runAsUser: 0
-    pod.replicas.ingress: 3
+    pod.replicas.ingress: 1
     pod.replicas.error_page: 1
     conf.ingress.bind-address: 0.0.0.0
     endpoints.ingress.port.server.default: 28080
@@ -200,7 +190,7 @@ charts:
   override:
     conf.keystone.DEFAULT.debug: true
     pod.security_context.keystone.pod.runAsUser: 42425
-    pod.replicas.api: 1
+    pod.replicas.api: 3
     endpoints.identity.auth.admin.username: admin
     endpoints.identity.auth.admin.password: $(adminPassword)
     endpoints.cluster_domain_suffix: $(clusterName)
@@ -239,7 +229,7 @@ charts:
   source:
     repository: $(repository)
   override:
-    pod.replicas.server: 1
+    pod.replicas.server: 3
     volume.size: 40Gi
     volume.enabled: true
     volume.class_name: rbd
@@ -257,6 +247,7 @@ charts:
     monitoring.prometheus.enabled: true
     monitoring.prometheus.memcached_exporter.scrape: true
     endpoints.cluster_domain_suffix: $(clusterName)
+
 - name: neutron
   source:
     repository: $(repository)
@@ -289,8 +280,7 @@ charts:
     network.backend:
     - openvswitch
     network.share_namespaces: true
-    network.interface.tunnel: $(hypervisorInterface)
-    conf.auto_bridge_add.br-ex:  $(libvirtInterface)
+    network.interface.tunnel_network_cidr: "192.168.197.0/24"
     conf.paste.composite:neutronapi_v2_0.keystone: cors http_proxy_to_wsgi request_id catch_errors authtoken keystonecontext extensions neutronapiapp_v2_0
     conf.paste.app:neutronversions.paste.app_factory: neutron.pecan_wsgi.app:versions_factory
     conf.neutron_sudoers: |
@@ -317,7 +307,7 @@ charts:
 # using flat network instead of dvr. by jacob
 #      conf.neutron.l3_agent.DEFAULT.agent_mode: dvr_snat
     conf.plugins.ml2_conf.ml2.mechanism_drivers: openvswitch,l2population
-    conf.plugins.ml2_conf.ml2.type_drivers: vlan, flat, vxlan
+    conf.plugins.ml2_conf.ml2.type_drivers: flat, vxlan
     conf.plugins.ml2_conf.ml2.tenant_network_types: vxlan
 # using vlan network instead of dvr. by jacob
 #      conf.plugins.ml2_conf.ml2_type_vlan.network_vlan_ranges: "provider:110:110"
@@ -327,10 +317,15 @@ charts:
     conf.plugins.openvswitch_agent.agent.arp_responder: True
 # using vlan network instead of dvr. by jacob
 #      conf.plugins.openvswitch_agent.agent.enable_distributed_routing: True
-    conf.plugins.openvswitch_agent.agent.enable_distributed_routing: False
     conf.plugins.openvswitch_agent.ovs.bridge_mappings: provider:br-ex
     conf.plugins.openvswitch_agent.securitygroup.firewall_driver: openvswitch
     endpoints.cluster_domain_suffix: $(clusterName)
+    manifests.daemonset_dhcp_agent: true
+    manifests.daemonset_l3_agent: true
+    manifests.daemonset_lb_agent: false
+    manifests.daemonset_metadata_agent: true
+    manifests.daemonset_ovs_agent: true
+    manifests.daemonset_sriov_agent: false
 
 - name: nova
   source:
@@ -343,10 +338,6 @@ charts:
     network.novncproxy.name: nova-novncproxy
     network.novncproxy.node_port.enabled: true
     network.novncproxy.node_port.port: 30608
-    console.novnc.compute.vncserver_proxyclient_interface: $(hypervisorInterface)
-    console.novnc.vncproxy.vncserver_proxyclient_interface: $(hypervisorInterface)
-    conf.hypervisor.host_interface: $(hypervisorInterface)
-    conf.libvirt.live_migration_interface: $(hypervisorInterface)
     conf.ceph.enabled: true
     conf.ceph.admin_keyring: $(ceph_keyring)
     conf.ceph.cinder.user: cinder
@@ -354,9 +345,8 @@ charts:
     conf.nova.DEFAULT.scheduler_default_filters: RetryFilter,AvailabilityZoneFilter,RamFilter,ComputeFilter,ComputeCapabilitiesFilter,ImagePropertiesFilter,ServerGroupAntiAffinityFilter,ServerGroupAffinityFilter
     conf.nova.DEFAULT.debug: true
     conf.nova.DEFAULT.dhcp_domain: ""
-    conf.nova.DEFAULT.config_drive_cdrom: true
-    conf.nova.DEFAULT.config_drive_format: iso9660
-    conf.nova.DEFAULT.force_config_drive: true
+    conf.nova.DEFAULT.config_drive_cdrom: false
+    conf.nova.DEFAULT.force_config_drive: false
     conf.nova.DEFAULT.ram_allocation_ratio: 0.8
     conf.nova.DEFAULT.disk_allocation_ratio: 9999.0
     conf.nova.DEFAULT.cpu_allocation_ratio: 8.0
@@ -389,40 +379,10 @@ charts:
     repository: $(repository)
   override:
     pod.replicas.server: 3
-#      volume.class_name: rbd
-    volume.use_local_path.enabled: true
-    volume.use_local_path.host_path: /ssd-data/rabbitmq-data
     volume.chown_on_start: true
+    volume.class_name: $(storageClassName)
     volume.enabled: false
     volume.size: 512Mi
     monitoring.prometheus.enabled: true
     monitoring.prometheus.rabbitmq_exporter.scrape: true
     endpoints.cluster_domain_suffix: $(clusterName)
-
-#- name: prometheus-kube-state-metrics
-#  source:
-#    repository: $(repository)
-
-#- name: grafana
-#  source:
-#    repository: $(repository)
-
-#- name: prometheus
-#  source:
-#    repository: $(repository)
-#  override:
-#    endpoints.monitoring.auth.admin.username: admin
-#    endpoints.monitoring.auth.admin.password: $(adminPassword)
-#    storage.storage_class: $(storageClassName)
-#    storage.requests.storage: 22Gi
-
-#- name: prometheus-openstack-exporter
-#  source:
-#    repository: $(repository)
-#  override:
-#    endpoints.identity.name: keystone
-#    endpoints.identity.auth.admin.region_name: RegionOne
-#    endpoints.identity.auth.admin.username: admin
-#    endpoints.identity.auth.admin.password: $(adminPassword)
-#    dummy: dummy
-#    pod.mandatory_access_control.type: null

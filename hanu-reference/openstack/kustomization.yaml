@@ -1,6 +1,4 @@
 resources:
   - ../base
-
 transformers:
   - site-values.yaml
-  - image-values.yaml
