@@ -2,7 +2,7 @@
 
 set -e
 
-BASE_SITE="hanu-reference"
+BASE_SITE="decapod-reference"
 
 function usage {
         echo -e "\nUsage: ./$0 site_name [--helm-repo LOCAL_HELM_REPO --registry IMAGE_LOCAL_REGISTRY]"
@@ -37,7 +37,7 @@ export LOCAL_REGISTRY
 
 if [ "$offline" = true ]
 then
-	BASE_SITE="hanu-reference-offline"
+	BASE_SITE="decapod-reference-offline"
 fi
 
 echo "=== new site $SITE_NAME is creating from $BASE_SITE..."
